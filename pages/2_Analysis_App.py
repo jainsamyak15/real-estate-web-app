@@ -5,6 +5,8 @@ import pickle
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import seaborn as sns
+import ast
+import re
 
 st.set_page_config(page_title="Plotting Demo")
 st.set_option('deprecation.showPyplotGlobalUse', False)
@@ -13,6 +15,20 @@ st.set_option('deprecation.showPyplotGlobalUse', False)
 st.title('Analytics')
 
 new_df = pd.read_csv('datasets/data_viz1.csv')
+wordcloud_df = pd.read_csv('datasets/wordcloud_df.csv', header=None, names=['features', 'sector'])
+# Function to safely process the features
+def process_features(features):
+    if pd.isna(features):
+        return []
+    try:
+        # Remove brackets and split by comma
+        return [item.strip().strip("'") for item in features.strip('[]').split(',')]
+    except:
+        return []
+
+# Apply the function to process features
+wordcloud_df['features'] = wordcloud_df['features'].apply(process_features)
+
 feature_text = pickle.load(open('datasets/feature_text.pkl', 'rb'))
 
 group_df = new_df.groupby('sector').mean(numeric_only=True)[
@@ -27,15 +43,32 @@ st.plotly_chart(fig, use_container_width=True)
 
 st.header('Features Wordcloud')
 
+# Add sector selection for word cloud
+sector_options = ['All'] + sorted([sector for sector in wordcloud_df['sector'].unique().tolist() if sector != "sector"])
+selected_sector = st.selectbox('Select Sector for Word Cloud', sector_options)
+
+# Generate word cloud text based on selected sector
+if selected_sector == 'All':
+    wordcloud_text = ' '.join([' '.join(features) for features in wordcloud_df['features']])
+else:
+    # Filtering features for the selected sector
+    sector_features = wordcloud_df[wordcloud_df['sector'] == selected_sector]['features'].tolist()
+    wordcloud_text = ' '.join([' '.join(features) for features in sector_features])
+
+# Using regex to remove unwanted words (case-insensitive)
+wordcloud_text = re.sub(r'\b(feng|shui|Feng Shui|Feng|Shui)\b', '', wordcloud_text, flags=re.IGNORECASE)
+wordcloud_text = re.sub(r'\b(Vaastu)\b', 'Great Vaastu', wordcloud_text, flags=re.IGNORECASE)
+
 wordcloud = WordCloud(width=800, height=800,
                       background_color='black',
-                      stopwords={'s'},  # Any stopwords you'd like to exclude
-                      min_font_size=10).generate(feature_text)
+                      min_font_size=10).generate(wordcloud_text)
 
+plt.figure(figsize=(10, 10))
 plt.imshow(wordcloud, interpolation='bilinear')
 plt.axis("off")
 plt.tight_layout(pad=0)
 st.pyplot()
+
 
 st.header('Area Vs Price')
 
