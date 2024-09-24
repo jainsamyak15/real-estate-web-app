@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import os
 
-st.set_page_config(page_title="Viz Demo")
+st.set_page_config(page_title="Property Price Prediction")
 
 with open('df.pkl', 'rb') as file:
     df = pickle.load(file)
@@ -20,15 +20,20 @@ property_type = st.selectbox('Property Type', ['flat', 'house'])
 # sector
 sector = st.selectbox('Sector', sorted(df['sector'].unique().tolist()))
 
-bedrooms = float(st.selectbox('Number of Bedroom', sorted(df['bedRoom'].unique().tolist())))
+# Bedrooms with input validation
+bedrooms = st.number_input('Number of Bedrooms', min_value=1, max_value=10, value=2, step=1)
 
-bathroom = float(st.selectbox('Number of Bathrooms', sorted(df['bathroom'].unique().tolist())))
+# Bathrooms with input validation
+bathrooms = st.number_input('Number of Bathrooms', min_value=1, max_value=bedrooms, value=2, step=1)
 
 balcony = st.selectbox('Balconies', sorted(df['balcony'].unique().tolist()))
 
 property_age = st.selectbox('Property Age', sorted(df['agePossession'].unique().tolist()))
 
-built_up_area = float(st.number_input('Built Up Area'))
+# Built-up area with input validation
+avg_bedroom_size = 132
+avg_bathroom_size = 40
+built_up_area = st.number_input('Built Up Area (sq ft)', min_value=bedrooms * avg_bedroom_size + bathrooms * avg_bathroom_size, max_value=10000, value=1500, step=50)
 
 servant_room = float(st.selectbox('Servant Room', [0.0, 1.0]))
 store_room = float(st.selectbox('Store Room', [0.0, 1.0]))
@@ -38,22 +43,28 @@ luxury_category = st.selectbox('Luxury Category', sorted(df['luxury_category'].u
 floor_category = st.selectbox('Floor Category', sorted(df['floor_category'].unique().tolist()))
 
 if st.button('Predict'):
-    # form a dataframe
-    data = [[property_type, sector, bedrooms, bathroom, balcony, property_age, built_up_area, servant_room, store_room,
-             furnishing_type, luxury_category, floor_category]]
-    columns = ['property_type', 'sector', 'bedRoom', 'bathroom', 'balcony',
-               'agePossession', 'built_up_area', 'servant room', 'store room',
-               'furnishing_type', 'luxury_category', 'floor_category']
+    # Input validation
+    if built_up_area < bedrooms * avg_bedroom_size + bathrooms * avg_bathroom_size:
+        st.error("The built-up area seems too small for the number of bedrooms and bathrooms. Please check your inputs.")
+    elif built_up_area / bedrooms > 1000:
+        st.error("The built-up area seems too large for the number of bedrooms. Please check your inputs.")
+    elif bathrooms > bedrooms:
+        st.error("The number of bathrooms cannot be greater than the number of bedrooms. Please check your inputs.")
+    else:
+        # form a dataframe
+        data = [[property_type, sector, bedrooms, bathrooms, balcony, property_age, built_up_area, servant_room, store_room,
+                 furnishing_type, luxury_category, floor_category]]
+        columns = ['property_type', 'sector', 'bedRoom', 'bathroom', 'balcony',
+                   'agePossession', 'built_up_area', 'servant room', 'store room',
+                   'furnishing_type', 'luxury_category', 'floor_category']
 
-    # Convert to DataFrame
-    one_df = pd.DataFrame(data, columns=columns)
+        # Convert to DataFrame
+        one_df = pd.DataFrame(data, columns=columns)
 
-    #st.dataframe(one_df)
+        # predict
+        base_price = np.expm1(pipeline.predict(one_df))[0]
+        low = base_price - 0.22
+        high = base_price + 0.22
 
-    # predict
-    base_price = np.expm1(pipeline.predict(one_df))[0]
-    low = base_price - 0.22
-    high = base_price + 0.22
-
-    # display
-    st.text("The price of the flat is between {} Cr and {} Cr".format(round(low, 2), round(high, 2)))
+        # display
+        st.success(f"The estimated price of the property is between {round(low, 2)} Cr and {round(high, 2)} Cr")
